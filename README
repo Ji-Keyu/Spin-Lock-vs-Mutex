@@ -1,0 +1,57 @@
+NAME: Keyu Ji
+EMAIL: g.jikeyu@gmail.com
+ID: 704966744
+
+Included files:
+Source code: lab2_list.c SortedList.c SortedList.h --> build lab2_list
+Makefile: support build, tests, graphs, dist, clean, profile
+plot_list.sh plot_add.sh: shell scripts that run tests to print results to csv files
+lab2b_list.csv: CSV files that were obtained by the shell scripts plot_list.sh, includes the results from successful runs of lab2_list
+lab2_list.gp : shell scripts that use gunplot to plot graphs according to data in the CSV files
+png files: results obtained from the plotting shell scripts
+README: this document
+profile.out: executoin profiling report showing where time was spent in the unpartitioned spin-lock implementation
+
+
+QUESTION 2.3.1 - CPU time in the basic list implementation:
+In the 1 and 2-thread list tests, most of the CPU time is spent on insert(), length(), lookup(), delete().
+
+These functions are called in the loops for thousands of times. insert(), length() and lookup() also need to loop through the entire list to find the target and finish its job.
+
+In the high-thread spin-lock tests, most of the time is spent on waiting to get the lock. 
+
+In the high-thread mutex tests, most of the time is spent on waiting to get the mutex. 
+
+
+
+
+
+QUESTION 2.3.2 - Execution Profiling:
+Most of the time is spent on spinning and waiting to get the lock. 
+
+Because spin-lock does not actively yield when the thread cannot get the lock. Rather, the thread spins around to wait. As the number of threads becomes large, the queue of threads waiting to get the lock becomes longer and longer, and they will all spin around and wait, which wastes lots of time. 
+
+
+
+
+
+QUESTION 2.3.3 - Mutex Wait Time:
+The average lock-wait time rise so dramatically with the number of contending threads, because with more threads it is much more likely for many threads to simultaneously wait to execute the critical sections.
+
+The completion time per operation rises because more threads means that more time needs to be spent on waiting and context switching to execute the critical sections. 
+
+Despite that, the completion time per operation rises less dramatically because the it is not influenced much by the number of threads. When a thread is blocked, mutex automatically yields to another thread and tries to run that. So more threads only means more context switches, and while more threads are waiting and accumulating wait time, some threads are always doing real work at the same time. In conclusion, the operation speed is only slowed down by context switch, while the wait time increases dramatically since there are indeed much more threads waiting. 
+
+
+
+
+
+QUESTION 2.3.4 - Performance of Partitioned Lists
+With more lists, the throughput increases. 
+
+No. If we keep the #iterations and #threads the same, as the number of lists increase to a number such that at most one element would be inserted to each sub-list, the performance will not continue to increase since that's already the fastest scneario. 
+
+This does not seem to be true in the graphs. The graphs show that as the number of lists increase, the performance increases as the number of lists increase if we keep the ratio of #lists and #threads the same. 
+Suppose 1 list and 2 threads and 1000 iterations, the two threads will both loop 1000 iterations on this one single list. As a result, the two threads will need to loop through a long list to insert(), length() and lookup(). This looping takes a long time.
+When it's 5 lists and 10 threads and 1000 iterations, given that we have a good hash function, the 1000 iterations are evenly distributed to the 5 lists. As a result, now the threads will only need to deal with 5 shorter list, and the hash function can quickly tell the threads which sub-list to look into. This saves a lot of time. 
+In both cases, the contention among threads is approximately the same as on average there are 2 threads per list. 

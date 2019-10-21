@@ -1,0 +1,354 @@
+Total: 1114 samples
+     958  86.0%  86.0%     1114 100.0% t_func
+     109   9.8%  95.8%      109   9.8% __strcmp_sse42
+      23   2.1%  97.8%       81   7.3% SortedList_lookup
+      15   1.3%  99.2%       75   6.7% SortedList_insert
+       9   0.8% 100.0%        9   0.8% _init
+       0   0.0% 100.0%     1114 100.0% __clone
+       0   0.0% 100.0%     1114 100.0% start_thread
+ROUTINE ====================== t_func in /u/eng/class/classkji/111/lab2/lab2_list.c
+   958   1114 Total samples (flat / cumulative)
+     .      .   45: 	struct timespec start, finish;
+     .      .   46: 	long long time;
+     .      .   47: } t_func_arg;
+     .      .   48: 
+     .      .   49: void *t_func(void *a)
+---
+     .      .   50: {
+     .      .   51: 	t_func_arg *b = (t_func_arg *)a;
+     .      .   52: 	switch(sync_opt)
+     .      .   53: 	{
+     .      .   54: 		case 'm':
+     .      .   55: 		{
+     .      .   56: 			for (int i = 0; i < b->iterations; ++i)
+     .      .   57: 			{
+     .      .   58: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .   59: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .   60: 				pthread_mutex_lock(mutex+nlist);
+     .      .   61: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .   62: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .      .   63: 				SortedList_insert(b->list+nlist, b->elements+i);
+     .      .   64: 				pthread_mutex_unlock(mutex+nlist);
+     .      .   65: 			}
+     .      .   66: 			
+     .      .   67: 			long long length;
+     .      .   68: 			for (int i = 0; i < num_lists; ++i)
+     .      .   69: 			{
+     .      .   70: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .   71: 				pthread_mutex_lock(mutex+i);
+     .      .   72: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .   73: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .      .   74: 				length = SortedList_length(b->list+i);
+     .      .   75: 				pthread_mutex_unlock(mutex+i);
+     .      .   76: 				if (length == -1)
+     .      .   77: 				{
+     .      .   78: 					fprintf(stderr, "list corrupted in length func\n");
+     .      .   79: 					exit(2);
+     .      .   80: 				}
+     .      .   81: 			}
+     .      .   82: 			for (int i = 0; i < b->iterations; ++i) //!!!
+     .      .   83: 			{
+     .      .   84: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .   85: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .   86: 				pthread_mutex_lock(mutex+nlist);
+     .      .   87: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .   88: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .      .   89: 				SortedListElement_t *target = SortedList_lookup(b->list+nlist, b->elements[i].key);
+     .      .   90: 				if (target == NULL)
+     .      .   91: 				{
+     .      .   92: 					fprintf(stderr, "list corrupted in lookup func\n");
+     .      .   93: 					exit(2);
+     .      .   94: 				}
+     .      .   95: 				else
+     .      .   96: 				{
+     .      .   97: 					int rc = SortedList_delete(target);
+     .      .   98: 					pthread_mutex_unlock(mutex+nlist);
+     .      .   99: 					if(rc)
+     .      .  100: 					{
+     .      .  101: 						fprintf(stderr, "list corrupted in delete func, %d\n", i);
+     .      .  102: 						exit(2);
+     .      .  103: 					}
+     .      .  104: 				}
+     .      .  105: 			}
+     .      .  106: 		}
+     .      .  107: 		break;
+     .      .  108: 
+     .      .  109: 		case 's':
+     .      .  110: 		{
+     .      .  111: 			for (int i = 0; i < b->iterations; ++i)
+     .      .  112: 			{
+     .      .  113: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .  114: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+   547    547  115: 				while(__sync_lock_test_and_set(spinlock+nlist, 1))
+     .      .  116: 				{continue;}
+     .      .  117: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     1      1  118: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .     75  119: 				SortedList_insert(b->list+nlist, &(b->elements[i]));
+     .      .  120: 				__sync_lock_release (spinlock+nlist);
+     .      .  121: 			}
+     .      .  122: 
+     .      .  123: 			long long length;
+     .      .  124: 			for (int i = 0; i < num_lists; ++i)
+     .      .  125: 			{
+     .      .  126: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .  127: 				while(__sync_lock_test_and_set(spinlock+i, 1))
+     .      .  128: 				{continue;}
+     .      .  129: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .  130: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .      .  131: 				length = SortedList_length(b->list+i);
+     .      .  132: 				__sync_lock_release (spinlock+i);
+     .      .  133: 				if (length == -1)
+     .      .  134: 				{
+     .      .  135: 					fprintf(stderr, "list corrupted in length func\n");
+     .      .  136: 					exit(2);
+     .      .  137: 				}
+     .      .  138: 			}
+     .      .  139: 			
+     .      .  140: 			
+     .      .  141: 			for (int i = 0; i < b->iterations; ++i)
+     .      .  142: 			{
+     .      .  143: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .  144: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+   410    410  145: 				while(__sync_lock_test_and_set(spinlock+nlist, 1))
+     .      .  146: 				{continue;}
+     .      .  147: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .  148: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .     81  149: 				SortedListElement_t *target = SortedList_lookup(b->list+nlist, b->elements[i].key);
+     .      .  150: 				if (target == NULL)
+     .      .  151: 				{
+     .      .  152: 					fprintf(stderr, "list corrupted in lookup func\n");
+     .      .  153: 					exit(2);
+     .      .  154: 				}
+     .      .  155: 				else
+     .      .  156: 				{
+     .      .  157: 					int rc = SortedList_delete(target);
+     .      .  158: 					__sync_lock_release (spinlock+nlist);
+     .      .  159: 					if(rc)
+     .      .  160: 					{
+     .      .  161: 						fprintf(stderr, "list corrupted in delete func, %d\n", i);
+     .      .  162: 						exit(2);
+     .      .  163: 					}
+     .      .  164: 				}
+     .      .  165: 			}
+     .      .  166: 		}
+     .      .  167: 		break;
+     .      .  168: 
+     .      .  169: 		case 0:
+     .      .  170: 		{
+     .      .  171: 			for (int i = 0; i < b->iterations; ++i)
+     .      .  172: 			{
+     .      .  173: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .  174: 				SortedList_insert((b->list+nlist), &(b->elements[i]));
+     .      .  175: 			}
+     .      .  176: 
+     .      .  177: 			for (int i = 0; i < num_lists; ++i)
+     .      .  178: 			{
+     .      .  179: 				if (SortedList_length(b->list+i) == -1)
+     .      .  180: 				{
+     .      .  181: 					fprintf(stderr, "list corrupted in length func\n");
+     .      .  182: 					exit(2);
+     .      .  183: 				}
+     .      .  184: 			}
+     .      .  185: 				
+     .      .  186: 			for (int i = 0; i < b->iterations; ++i)
+     .      .  187: 			{
+     .      .  188: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .  189: 				SortedListElement_t *target = SortedList_lookup((b->list+nlist), b->elements[i].key);
+     .      .  190: 				if (target == NULL)
+     .      .  191: 				{
+     .      .  192: 					fprintf(stderr, "list corrupted in lookup func\n");
+     .      .  193: 					exit(2);
+     .      .  194: 				}
+     .      .  195: 				else
+     .      .  196: 				{
+     .      .  197: 					if(SortedList_delete(target))
+     .      .  198: 					{
+     .      .  199: 						fprintf(stderr, "list corrupted in delete func\n");
+     .      .  200: 						exit(2);
+     .      .  201: 					}
+     .      .  202: 				}
+     .      .  203: 			}
+     .      .  204: 		}
+     .      .  205: 		break;
+     .      .  206: 	}
+     .      .  207: 	return NULL;
+     .      .  208: }
+---
+     .      .  209: 
+     .      .  210: void handler(int signum)
+     .      .  211: {
+     .      .  212: 	fprintf(stderr, "signal %d caught\n", signum);
+     .      .  213: 	exit(2);
+ROUTINE ====================== t_func in /u/eng/class/classkji/111/lab2/lab2_list.c
+   958   1114 Total samples (flat / cumulative)
+     .      .   45: 	struct timespec start, finish;
+     .      .   46: 	long long time;
+     .      .   47: } t_func_arg;
+     .      .   48: 
+     .      .   49: void *t_func(void *a)
+---
+     .      .   50: {
+     .      .   51: 	t_func_arg *b = (t_func_arg *)a;
+     .      .   52: 	switch(sync_opt)
+     .      .   53: 	{
+     .      .   54: 		case 'm':
+     .      .   55: 		{
+     .      .   56: 			for (int i = 0; i < b->iterations; ++i)
+     .      .   57: 			{
+     .      .   58: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .   59: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .   60: 				pthread_mutex_lock(mutex+nlist);
+     .      .   61: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .   62: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .      .   63: 				SortedList_insert(b->list+nlist, b->elements+i);
+     .      .   64: 				pthread_mutex_unlock(mutex+nlist);
+     .      .   65: 			}
+     .      .   66: 			
+     .      .   67: 			long long length;
+     .      .   68: 			for (int i = 0; i < num_lists; ++i)
+     .      .   69: 			{
+     .      .   70: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .   71: 				pthread_mutex_lock(mutex+i);
+     .      .   72: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .   73: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .      .   74: 				length = SortedList_length(b->list+i);
+     .      .   75: 				pthread_mutex_unlock(mutex+i);
+     .      .   76: 				if (length == -1)
+     .      .   77: 				{
+     .      .   78: 					fprintf(stderr, "list corrupted in length func\n");
+     .      .   79: 					exit(2);
+     .      .   80: 				}
+     .      .   81: 			}
+     .      .   82: 			for (int i = 0; i < b->iterations; ++i) //!!!
+     .      .   83: 			{
+     .      .   84: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .   85: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .   86: 				pthread_mutex_lock(mutex+nlist);
+     .      .   87: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .   88: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .      .   89: 				SortedListElement_t *target = SortedList_lookup(b->list+nlist, b->elements[i].key);
+     .      .   90: 				if (target == NULL)
+     .      .   91: 				{
+     .      .   92: 					fprintf(stderr, "list corrupted in lookup func\n");
+     .      .   93: 					exit(2);
+     .      .   94: 				}
+     .      .   95: 				else
+     .      .   96: 				{
+     .      .   97: 					int rc = SortedList_delete(target);
+     .      .   98: 					pthread_mutex_unlock(mutex+nlist);
+     .      .   99: 					if(rc)
+     .      .  100: 					{
+     .      .  101: 						fprintf(stderr, "list corrupted in delete func, %d\n", i);
+     .      .  102: 						exit(2);
+     .      .  103: 					}
+     .      .  104: 				}
+     .      .  105: 			}
+     .      .  106: 		}
+     .      .  107: 		break;
+     .      .  108: 
+     .      .  109: 		case 's':
+     .      .  110: 		{
+     .      .  111: 			for (int i = 0; i < b->iterations; ++i)
+     .      .  112: 			{
+     .      .  113: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .  114: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+   547    547  115: 				while(__sync_lock_test_and_set(spinlock+nlist, 1))
+     .      .  116: 				{continue;}
+     .      .  117: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     1      1  118: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .     75  119: 				SortedList_insert(b->list+nlist, &(b->elements[i]));
+     .      .  120: 				__sync_lock_release (spinlock+nlist);
+     .      .  121: 			}
+     .      .  122: 
+     .      .  123: 			long long length;
+     .      .  124: 			for (int i = 0; i < num_lists; ++i)
+     .      .  125: 			{
+     .      .  126: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+     .      .  127: 				while(__sync_lock_test_and_set(spinlock+i, 1))
+     .      .  128: 				{continue;}
+     .      .  129: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .  130: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .      .  131: 				length = SortedList_length(b->list+i);
+     .      .  132: 				__sync_lock_release (spinlock+i);
+     .      .  133: 				if (length == -1)
+     .      .  134: 				{
+     .      .  135: 					fprintf(stderr, "list corrupted in length func\n");
+     .      .  136: 					exit(2);
+     .      .  137: 				}
+     .      .  138: 			}
+     .      .  139: 			
+     .      .  140: 			
+     .      .  141: 			for (int i = 0; i < b->iterations; ++i)
+     .      .  142: 			{
+     .      .  143: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .  144: 				clock_gettime(CLOCK_REALTIME, &(b->start));
+   410    410  145: 				while(__sync_lock_test_and_set(spinlock+nlist, 1))
+     .      .  146: 				{continue;}
+     .      .  147: 				clock_gettime(CLOCK_REALTIME, &(b->finish));
+     .      .  148: 				(*b).time += b->finish.tv_sec*1000000000 + b->finish.tv_nsec - b->start.tv_sec*1000000000 - b->start.tv_nsec;
+     .     81  149: 				SortedListElement_t *target = SortedList_lookup(b->list+nlist, b->elements[i].key);
+     .      .  150: 				if (target == NULL)
+     .      .  151: 				{
+     .      .  152: 					fprintf(stderr, "list corrupted in lookup func\n");
+     .      .  153: 					exit(2);
+     .      .  154: 				}
+     .      .  155: 				else
+     .      .  156: 				{
+     .      .  157: 					int rc = SortedList_delete(target);
+     .      .  158: 					__sync_lock_release (spinlock+nlist);
+     .      .  159: 					if(rc)
+     .      .  160: 					{
+     .      .  161: 						fprintf(stderr, "list corrupted in delete func, %d\n", i);
+     .      .  162: 						exit(2);
+     .      .  163: 					}
+     .      .  164: 				}
+     .      .  165: 			}
+     .      .  166: 		}
+     .      .  167: 		break;
+     .      .  168: 
+     .      .  169: 		case 0:
+     .      .  170: 		{
+     .      .  171: 			for (int i = 0; i < b->iterations; ++i)
+     .      .  172: 			{
+     .      .  173: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .  174: 				SortedList_insert((b->list+nlist), &(b->elements[i]));
+     .      .  175: 			}
+     .      .  176: 
+     .      .  177: 			for (int i = 0; i < num_lists; ++i)
+     .      .  178: 			{
+     .      .  179: 				if (SortedList_length(b->list+i) == -1)
+     .      .  180: 				{
+     .      .  181: 					fprintf(stderr, "list corrupted in length func\n");
+     .      .  182: 					exit(2);
+     .      .  183: 				}
+     .      .  184: 			}
+     .      .  185: 				
+     .      .  186: 			for (int i = 0; i < b->iterations; ++i)
+     .      .  187: 			{
+     .      .  188: 				unsigned long nlist = hash(b->elements[i].key) % num_lists;
+     .      .  189: 				SortedListElement_t *target = SortedList_lookup((b->list+nlist), b->elements[i].key);
+     .      .  190: 				if (target == NULL)
+     .      .  191: 				{
+     .      .  192: 					fprintf(stderr, "list corrupted in lookup func\n");
+     .      .  193: 					exit(2);
+     .      .  194: 				}
+     .      .  195: 				else
+     .      .  196: 				{
+     .      .  197: 					if(SortedList_delete(target))
+     .      .  198: 					{
+     .      .  199: 						fprintf(stderr, "list corrupted in delete func\n");
+     .      .  200: 						exit(2);
+     .      .  201: 					}
+     .      .  202: 				}
+     .      .  203: 			}
+     .      .  204: 		}
+     .      .  205: 		break;
+     .      .  206: 	}
+     .      .  207: 	return NULL;
+     .      .  208: }
+---
+     .      .  209: 
+     .      .  210: void handler(int signum)
+     .      .  211: {
+     .      .  212: 	fprintf(stderr, "signal %d caught\n", signum);
+     .      .  213: 	exit(2);
